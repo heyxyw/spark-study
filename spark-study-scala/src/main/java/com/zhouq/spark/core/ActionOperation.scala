@@ -10,8 +10,27 @@ import org.apache.spark.{SparkConf, SparkContext}
 object ActionOperation {
 
   def main(args: Array[String]): Unit = {
-    countByKey()
+//    countByKey()
+    collect()
   }
+
+  def collect():Unit = {
+    val conf = new SparkConf().setAppName("collect").setMaster("local")
+
+    val sc = new SparkContext(conf)
+
+    val numbers = Array(1,2,3,4,5,6,7,8,9,10)
+
+    val numbersRDD = sc.parallelize(numbers)
+
+    val doubleNumbersRDD = numbersRDD.map( _ * 2)
+    val numbersArrays = doubleNumbersRDD.collect()
+
+    numbersArrays.foreach(println)
+    sc.stop()
+
+  }
+
 
   def countByKey(): Unit = {
     val conf = new SparkConf().setAppName("countByKey").setMaster("local")
