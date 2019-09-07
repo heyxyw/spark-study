@@ -15,7 +15,8 @@ object TransformationOperation {
 
     //    groupByKey()
 //    reduceByKey()
-    sortByKey()
+//    sortByKey()
+    join()
   }
 
   def map(): Unit = {
@@ -118,5 +119,23 @@ object TransformationOperation {
     sc.stop()
   }
 
+  def join():Unit = {
+    val conf: SparkConf = new SparkConf().setAppName("join").setMaster("local")
+    val sc = new SparkContext(conf)
+
+    val studentArrays = Array(Tuple2(1, "leo"), Tuple2(2, "tom"),Tuple2(3, "marry"), Tuple2(4, "jack"))
+    val scoreArrays = Array(Tuple2(1, 88), Tuple2(2, 60), Tuple2(3, 100),Tuple2(4, 59))
+
+    val student = sc.parallelize(studentArrays,1)
+    val scores = sc.parallelize(scoreArrays)
+
+    val studentSources = student.join(scores)
+
+    studentSources.foreach(studentAndSource =>{
+      println(studentAndSource._1 + ":" + studentAndSource._2._1 + ":"+ studentAndSource._2._2)
+    })
+
+    sc.stop()
+  }
 
 }
