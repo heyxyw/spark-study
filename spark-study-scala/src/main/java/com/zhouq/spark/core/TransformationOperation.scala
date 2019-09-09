@@ -16,7 +16,9 @@ object TransformationOperation {
     //    groupByKey()
 //    reduceByKey()
 //    sortByKey()
-    join()
+//    join()
+
+    groupByKey()
   }
 
   def map(): Unit = {
@@ -75,11 +77,13 @@ object TransformationOperation {
 
     val groupedSources: RDD[(String, Iterable[Int])] = sources.groupByKey()
 
-    groupedSources.foreach(source => {
-      println(source._1)
-      source._2.foreach(singleScore => println(singleScore))
-      println("-----------------------------")
-    })
+    groupedSources.map(e =>(e._1,e._2.sum)).foreach(println)
+
+//    groupedSources.foreach(source => {
+//      println(source._1)
+//      source._2.foreach(singleScore => println(singleScore))
+//      println("-----------------------------")
+//    })
 
     sc.stop()
   }

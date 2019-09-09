@@ -6,12 +6,12 @@ import org.apache.spark.sql.DataFrame;
 import org.apache.spark.sql.SQLContext;
 
 /**
- * //todo
+ * DataFrame 操作。
  *
  * @Author: zhouq
  * @Date: 2019/9/6
  */
-public class DataFreamOpeate {
+public class DataFrameOpeate {
     public static void main(String[] args) {
         SparkConf conf = new SparkConf().setAppName("DataFreamCreate").setMaster("local");
 
