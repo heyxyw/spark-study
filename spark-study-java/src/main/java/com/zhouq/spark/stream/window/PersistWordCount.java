@@ -1,10 +1,9 @@
-package com.zhouq.spark.stream;
+package com.zhouq.spark.stream.window;
 
 import com.google.common.base.Optional;
 import org.apache.spark.SparkConf;
-import org.apache.spark.api.java.function.FlatMapFunction;
-import org.apache.spark.api.java.function.Function2;
-import org.apache.spark.api.java.function.PairFunction;
+import org.apache.spark.api.java.JavaPairRDD;
+import org.apache.spark.api.java.function.*;
 import org.apache.spark.streaming.Durations;
 import org.apache.spark.streaming.api.java.JavaDStream;
 import org.apache.spark.streaming.api.java.JavaPairDStream;
@@ -12,30 +11,25 @@ import org.apache.spark.streaming.api.java.JavaReceiverInputDStream;
 import org.apache.spark.streaming.api.java.JavaStreamingContext;
 import scala.Tuple2;
 
+import java.sql.Connection;
+import java.sql.Statement;
 import java.util.Arrays;
+import java.util.Iterator;
 import java.util.List;
 
 /**
  * 基于 updateStateByKey 算子实现缓存机制的实时Wordcount 程序
  * Create by zhouq on 2019/10/2
  */
-public class UpdateStateByKeyWordCount {
+public class PersistWordCount {
 
     public static void main(String[] args) {
-
 
         SparkConf conf = new SparkConf().setMaster("local[2]").setAppName("PersistWordCount");
 
         JavaStreamingContext jssc = new JavaStreamingContext(conf, Durations.seconds(5));
 
-        // 第一点，如果要使用updateStateByKey算子，就必须设置一个checkpoint目录，开启checkpoint机制
-        // 这样的话才能把每个key对应的state除了在内存中有，那么是不是也要checkpoint一份
-        // 因为你要长期保存一份key的state的话，那么spark streaming是要求必须用checkpoint的，以便于在
-        // 内存数据丢失的时候，可以从checkpoint中恢复数据
-
-        // 开启checkpoint机制，很简单，只要调用jssc的checkpoint()方法，设置一个hdfs目录即可
         jssc.checkpoint("H:\\bigdatatest\\spark\\check_point_workcount");
-
 
         JavaReceiverInputDStream<String> lines = jssc.socketTextStream("hadoop5", 9999);
 
@@ -54,24 +48,10 @@ public class UpdateStateByKeyWordCount {
             }
         });
 
-        // 到了这里，就不一样了，之前的话，是不是直接就是pairs.reduceByKey
-        // 然后，就可以得到每个时间段的batch对应的RDD，计算出来的单词计数
-        // 然后，可以打印出那个时间段的单词计数
-        // 但是，有个问题，你如果要统计每个单词的全局的计数呢？
-        // 就是说，统计出来，从程序启动开始，到现在为止，一个单词出现的次数，那么就之前的方式就不好实现
-        // 就必须基于redis这种缓存，或者是mysql这种db，来实现累加
-
-        // 但是，我们的updateStateByKey，就可以实现直接通过Spark维护一份每个单词的全局的统计次数
         JavaPairDStream<String, Integer> wordcounts = pairs.updateStateByKey(
                 // Optional 可以理解为scala 的样例类，它代表一个值可以存在也可以不存在
                 new Function2<List<Integer>,
                         Optional<Integer>, Optional<Integer>>() {
-
-                    // 这里的两个参数
-                    // 对于每个单词。每次batch 计算的时候，都会调用这个函数
-                    // 第一个参数，values 相当于这个batch 中，这个key 的新值，可能有多个。
-                    // 比如说一个hello，可能有2个1，(hello, 1) (hello, 1)，那么传入的是(1,1)
-                    // 第二个参数，就是指的这个key 之前的状态，其中泛型是自己指定的。
 
                     @Override
                     public Optional<Integer> call(List<Integer> values, Optional<Integer> state) throws Exception {
@@ -93,9 +73,39 @@ public class UpdateStateByKeyWordCount {
                     }
                 });
 
-        // 到这里为止，相当于是，每个batch过来是，计算到pairs DStream，就会执行全局的updateStateByKey
-        // 算子，updateStateByKey返回的JavaPairDStream，其实就代表了每个key的全局的计数
-        wordcounts.print();
+
+        // 每次得到当前所有单词的统计次数之后，将其写入mysql存储，进行持久化，以便于后续的J2EE应用程序
+        // 进行显示
+        wordcounts.foreachRDD(new Function<JavaPairRDD<String, Integer>, Void>() {
+            @Override
+            public Void call(JavaPairRDD<String, Integer> wordCounts) throws Exception {
+
+                wordCounts.foreachPartition(new VoidFunction<Iterator<Tuple2<String, Integer>>>() {
+                    @Override
+                    public void call(Iterator<Tuple2<String, Integer>> wordCounts) throws Exception {
+                        //为每一个 partition 获取一个连接
+                        Connection conn = ConnectionPool.getConnection();
+
+                        //遍历partition 中的数据，使用同一个连接，插入数据库中
+
+                        Tuple2<String, Integer> wordCount = null;
+                        while (wordCounts.hasNext()) {
+                            wordCount = wordCounts.next();
+
+                            String sql = "insert into wordcount(word,count) "
+                                    + "values('" + wordCount._1 + "'," + wordCount._2 + ")";
+
+                            Statement stmt = conn.createStatement();
+                            stmt.executeUpdate(sql);
+                        }
+
+                        ConnectionPool.returnConnectiuon(conn);
+                    }
+                });
+
+                return null;
+            }
+        });
 
         jssc.start();
         jssc.awaitTermination();
