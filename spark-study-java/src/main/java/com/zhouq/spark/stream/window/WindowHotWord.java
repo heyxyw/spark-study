@@ -28,7 +28,7 @@ public class WindowHotWord {
         // 这里的搜索日志的格式
         // leo hello
         // tom world
-        JavaReceiverInputDStream<String> searchLogDStream = jssc.socketTextStream("hadoop5", 9999);
+        JavaReceiverInputDStream<String> searchLogDStream = jssc.socketTextStream("localhost", 9999);
 
         // 将搜索日志给转换成只有一个搜索词即可
         JavaDStream<String> searchWordDStream = searchLogDStream.map(new Function<String, String>() {
